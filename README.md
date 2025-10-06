@@ -73,6 +73,7 @@ Matplotlib: Histogram grafikleri ve veri görselleştirme
 
 
 Eğitim ve Kaynaklar
+
 Bu proje, Yılmaz Alacan'ın görüntü işleme eğitimleri üzerine kurgulanmış ve geliştirilmiştir. Temel görüntü işleme kavramları ve tekniklerinin pratik uygulaması olarak tasarlanmıştır.
 
 
