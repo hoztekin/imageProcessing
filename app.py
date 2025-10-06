@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import io
+import matplotlib.pyplot as plt
 
 # Sayfa Yapılandırması
 
@@ -61,6 +62,23 @@ def apply_filter(img, filter_type, intensity=1.0):
     elif filter_type == "Negatif":
         filtered_img = 255 - img_array
     
+    elif filter_type == "Sepia":  
+        # Sepia matrisi
+        sepia_filter = np.array([[0.272, 0.534, 0.131],
+                                [0.349, 0.686, 0.168],
+                                [0.393, 0.769, 0.189]])
+        
+        if len(img_array.shape) == 3:
+            # RGB görüntü için
+            filtered_img = cv2.transform(img_array, sepia_filter)
+            # Yoğunluk ayarı için orijinal ile karıştır
+            filtered_img = cv2.addWeighted(img_array, 1-intensity, filtered_img, intensity, 0)
+        else:
+            # Gri görüntüyü RGB'ye çevir
+            img_array_rgb = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
+            filtered_img = cv2.transform(img_array_rgb, sepia_filter)
+            filtered_img = cv2.addWeighted(img_array_rgb, 1-intensity, filtered_img, intensity, 0)
+            
     else :
         filtered_img = img_array
 
@@ -110,10 +128,32 @@ def add_custom_css():
                 </style>
                 """, unsafe_allow_html=True)
     
+def rotate_flip_image(img, operation):
+    """Görüntüyü döndürür veya aynalar"""
+    img_array = np.array(img)
+    
+    if operation == "90° Sağa Döndür":
+        rotated = cv2.rotate(img_array, cv2.ROTATE_90_CLOCKWISE)
+    elif operation == "90° Sola Döndür":
+        rotated = cv2.rotate(img_array, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    elif operation == "180° Döndür":
+        rotated = cv2.rotate(img_array, cv2.ROTATE_180)
+    elif operation == "Yatay Aynala":
+        rotated = cv2.flip(img_array, 1)
+    elif operation == "Dikey Aynala":
+        rotated = cv2.flip(img_array, 0)
+    else:
+        rotated = img_array
+    
+    if len(rotated.shape) == 2:
+        return Image.fromarray(rotated, mode='L')
+    else:
+        return Image.fromarray(rotated)
+
 def sidebar_content():
     st.sidebar.title("Hakkında")
     st.sidebar.info(
-        "Bu uygulama, üniversite öğrencileri hazırlanan"
+        "Bu uygulama, üniversite öğrencileri tarafından hazırlanan"
         "bir gelişim kampı projesi olarak tasarlanmıştır."
         "Görüntü işleme ve streamlit kullanımı konusunda"
         "temel bir örnek sunmaktadır."
@@ -123,7 +163,7 @@ def sidebar_content():
         """
         1. Sol taraftaki 'Bir görüntü yükleyin' butona tıklayın.
         2. Bilgisayarınızdan bir görüntü seçin (JPG, JPEG veya PNG).
-        3. 'Gri gormata dönüştür' butonuna tıklayın.
+        3. 'Gri formata dönüştür' butonuna tıklayın.
         4. İsterseniz ek filtreler uygulayabilirsiniz.
         5. Dönüştürülen görüntüyü indirmek için 'Görüntüyü indir' butonuna tıklayın.
         """
@@ -142,9 +182,43 @@ def sidebar_content():
         - **Keskinleştirme** : Görüntüdeki kenarları ve detayları vurgular.
         - **Kenar Algılama** : Görüntüdeki nesnelerin kenarlarını tespit eder.
         - **Negatif** : Görüntünün renklerini tersine çevirir.
+        - **Sepia** : Görüntüye nostaljik, eski fotoğraf görünümü kazandırır.
         """
     )
     
+def plot_histogram(img):
+    """Görüntünün histogram grafiğini oluşturur"""
+    img_array = np.array(img)
+    
+    fig, ax = plt.subplots(figsize=(10, 4))
+    
+    if len(img_array.shape) == 3:
+        # RGB görüntü için
+        colors = ('red', 'green', 'blue')
+        labels = ('Kırmızı', 'Yeşil', 'Mavi')
+        for i, (color, label) in enumerate(zip(colors, labels)):
+            histogram = cv2.calcHist([img_array], [i], None, [256], [0, 256])
+            ax.plot(histogram, color=color, label=label, alpha=0.7, linewidth=2)
+        ax.set_xlabel('Piksel Değeri')
+        ax.set_ylabel('Frekans')
+        ax.set_title('RGB Histogram')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    else:
+        # Gri görüntü için
+        histogram = cv2.calcHist([img_array], [0], None, [256], [0, 256])
+        ax.plot(histogram, color='gray', linewidth=2)
+        ax.fill_between(range(256), histogram.flatten(), alpha=0.3, color='gray')
+        ax.set_xlabel('Piksel Değeri')
+        ax.set_ylabel('Frekans')
+        ax.set_title('Gri Tonlama Histogram')
+        ax.grid(True, alpha=0.3)
+    
+    ax.set_xlim([0, 256])
+    plt.tight_layout()
+    return fig
+
+
 def main():
         
         add_custom_css()
@@ -175,18 +249,23 @@ def main():
                     else:
                         st.write(f"Kanal sayısı: 1")
                         st.write(f"Renk formatı: Gri Tonlama")
-                        
+                    
+                    st.markdown('<h3 class="sub-header">Histogram</h3>', unsafe_allow_html=True)
+                    histogram_fig = plot_histogram(image)
+                    st.pyplot(histogram_fig)
+                    plt.close() 
+                
                 #İşlem Seçenekleri
                 st.markdown('<h3 class= "sub-header">İşlem Seçenekleri</h3>', unsafe_allow_html=True)
                 process_option = st.radio(
                     "İşlem türünü seçin:",
-                    ["Sadece Gri Formata Dönüştür", "Gri Dönüştür ve Filtre Uygula", "Sadece Filtre Uygula"]
+                    ["Sadece Gri Formata Dönüştür", "Gri Dönüştür ve Filtre Uygula", "Sadece Filtre Uygula", "Döndür/Aynala"]
                 )        
                 
                 if "Filtre" in process_option:
                     filter_type = st.selectbox(
                         "Filtre türünü seçin:",
-                        ["Bulanıklaştırma", "Keskinleştirme", "Kenar Algılama", "Negatif"]                        
+                        ["Bulanıklaştırma", "Keskinleştirme", "Kenar Algılama", "Negatif", "Sepia", "Döndür/Aynala"]                        
                     )
                     intensity = st.slider(
                         "Filtre Yoğunluğu",
@@ -195,9 +274,13 @@ def main():
                         value=1.0,
                         step=0.1
                     )
-                    process_button = st.button("İşlemi başlat")
+                
+                if process_option == "Döndür/Aynala":
+                    rotation_option = st.selectbox("İşlem seçin:", ["90° Sağa Döndür", "90° Sola Döndür", "180° Döndür", "Yatay Aynala", "Dikey Aynala"])
                     
-                    if process_button:
+                process_button = st.button("İşlemi başlat")
+                    
+                if process_button:
                         try:                        
                             if process_option == "Sadece Gri Formata Dönüştür":
                                 st.info("Görüntü gri formata dönüştürülüyor...")
@@ -208,6 +291,10 @@ def main():
                                 gray_image = convert_to_grayscale(image)
                                 processed_image = apply_filter(gray_image,filter_type,intensity)
                                 result_caption = f"Gri formatlı ve {filter_type} filtresi uygulanmış görüntü"
+                            elif process_option == "Döndür/Aynala":  
+                                st.info(f"Görüntü işleniyor: {rotation_option}...")
+                                processed_image = rotate_flip_image(image, rotation_option)
+                                result_caption = f"{rotation_option} uygulanmış görüntü"
                             else:
                                 st.info(f"{filter_type} filtresi uygulanıyor...")
                                 processed_image = apply_filter(image,filter_type,intensity)
@@ -216,6 +303,11 @@ def main():
                             with col2:
                                 st.markdown('<h2 class="sub-header">İşlenmiş görüntü</h2>', unsafe_allow_html=True)
                                 st.image(processed_image,caption=result_caption,use_column_width=True)
+                                
+                                st.markdown('<h3 class="sub-header">İşlenmiş Görüntü Histogram</h3>', unsafe_allow_html=True)
+                                processed_histogram_fig = plot_histogram(processed_image)
+                                st.pyplot(processed_histogram_fig)
+                                plt.close()
                                 
                                 buf= io.BytesIO()
                                 processed_image.save(buf,format="PNG")
@@ -232,5 +324,5 @@ def main():
             else:
                 st.info("Lütfen bir görüntü yükleyin. Desteklenen formatlar: JPG, JPEG ve PNG")
 
-if __name__== "__main":
+if __name__ == "__main__":
     main()
